@@ -1,18 +1,32 @@
-# Node Modules
-node_modules/
-
-# Environment Variables
-.env
-
-# Logs
-*.log
-
-# Build Files
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
 dist/
 build/
+.venv/
+venv/
+env/
+.env
 
-# VS Code
+# Node
+node_modules/
+dist/
+.cache/
+*.log
+
+# Alembic
+alembic/versions/__pycache__/
+
+# IDE
 .vscode/
+.idea/
+*.swp
+*.swo
 
-# macOS
+# OS
 .DS_Store
+Thumbs.db

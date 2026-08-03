@@ -1,0 +1,286 @@
+================================================================================
+                        SMART TASK MANAGER — PROJECT OVERVIEW
+================================================================================
+
+WHAT IS THIS PROJECT?
+----------------------
+Smart Task Manager is a full-stack web application that helps users manage their
+daily tasks. Users can register an account, create and organize tasks, track
+progress through a dashboard, and receive automatic reminders via Email or
+WhatsApp before a task is due.
+
+--------------------------------------------------------------------------------
+TECH STACK
+--------------------------------------------------------------------------------
+
+FRONTEND
+  - React 18         : UI framework
+  - TypeScript       : Type-safe JavaScript
+  - Vite             : Fast development build tool
+  - Tailwind CSS     : Utility-first CSS styling
+  - React Router     : Client-side page navigation
+  - Axios            : HTTP client for API calls
+
+BACKEND
+  - FastAPI          : Python web framework (fast, async-ready)
+  - SQLAlchemy       : ORM for database interaction
+  - Alembic          : Database migration tool
+  - PostgreSQL       : Relational database
+  - python-jose      : JWT token creation and verification
+  - passlib/bcrypt   : Secure password hashing
+
+NOTIFICATIONS
+  - APScheduler      : Background job scheduler (runs inside the backend)
+  - Gmail SMTP       : Sends email reminders
+  - Twilio           : Sends WhatsApp reminders via the Sandbox API
+
+--------------------------------------------------------------------------------
+PROJECT STRUCTURE
+--------------------------------------------------------------------------------
+
+Smart-Task-Manager/
+│
+├── backend/
+│   ├── app/
+│   │   ├── main.py              --> App entry point; sets up CORS and scheduler
+│   │   ├── database.py          --> Database connection (SQLAlchemy engine)
+│   │   ├── models.py            --> Database table definitions (User, Task)
+│   │   ├── schemas.py           --> Request/response data shapes (Pydantic)
+│   │   ├── auth.py              --> JWT logic; password hashing; auth guard
+│   │   ├── utils.py             --> Email and WhatsApp sending functions
+│   │   ├── routes/
+│   │   │   ├── auth.py          --> /api/auth/* endpoints
+│   │   │   └── tasks.py         --> /api/tasks/* endpoints
+│   │   └── services/
+│   │       └── scheduler.py     --> Background reminder job (runs every 15 min)
+│   ├── alembic/
+│   │   └── versions/
+│   │       └── 001_initial.py   --> Initial DB migration (creates tables)
+│   ├── requirements.txt         --> Python dependencies
+│   ├── .env.example             --> Template for environment variables
+│   ├── alembic.ini              --> Alembic configuration
+│   └── Dockerfile               --> Backend container definition
+│
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx              --> Root component; router and auth state
+│   │   ├── main.tsx             --> React entry point
+│   │   ├── index.css            --> Global Tailwind styles + custom classes
+│   │   ├── types/
+│   │   │   └── index.ts         --> Shared TypeScript types (User, Task, etc.)
+│   │   ├── hooks/
+│   │   │   └── useAuth.ts       --> Stores JWT and user in localStorage
+│   │   ├── services/
+│   │   │   ├── api.ts           --> Axios instance with JWT header injection
+│   │   │   ├── authService.ts   --> Auth API calls (login, register, me)
+│   │   │   └── taskService.ts   --> Task API calls (CRUD, dashboard, filters)
+│   │   ├── components/
+│   │   │   ├── Navbar.tsx       --> Top navigation bar
+│   │   │   ├── TaskCard.tsx     --> Individual task display card
+│   │   │   ├── TaskModal.tsx    --> Create / Edit task popup form
+│   │   │   ├── StatCard.tsx     --> Dashboard statistic tile
+│   │   │   ├── ConfirmDialog.tsx--> Delete confirmation popup
+│   │   │   ├── Alert.tsx        --> Error / success / info banner
+│   │   │   └── Spinner.tsx      --> Loading spinner
+│   │   └── pages/
+│   │       ├── LoginPage.tsx    --> Login form
+│   │       ├── RegisterPage.tsx --> Registration form
+│   │       ├── DashboardPage.tsx--> Stats + recent tasks overview
+│   │       ├── TasksPage.tsx    --> Full task list with search and filters
+│   │       └── SettingsPage.tsx --> Profile and notification preferences
+│   ├── package.json
+│   ├── vite.config.ts           --> Vite config; proxies /api to backend
+│   ├── tailwind.config.js
+│   └── Dockerfile               --> Frontend container definition
+│
+├── docker-compose.yml           --> Runs DB + backend + frontend together
+├── .gitignore
+└── README.md                    --> Full setup instructions
+
+--------------------------------------------------------------------------------
+DATABASE SCHEMA
+--------------------------------------------------------------------------------
+
+TABLE: users
+  id                    INTEGER  Primary key
+  name                  TEXT     Full name
+  email                 TEXT     Unique; used for login
+  password              TEXT     Bcrypt-hashed; never stored plain
+  phone_number          TEXT     Optional; used for WhatsApp reminders
+  email_notifications   BOOLEAN  Whether to receive email reminders
+  whatsapp_notifications BOOLEAN Whether to receive WhatsApp reminders
+  created_at            DATETIME Auto-set on creation
+
+TABLE: tasks
+  id            INTEGER  Primary key
+  user_id       INTEGER  Foreign key -> users.id
+  title         TEXT     Required; max 255 chars
+  description   TEXT     Optional
+  priority      ENUM     low | medium | high  (default: medium)
+  status        ENUM     pending | in_progress | completed  (default: pending)
+  due_date      DATETIME Optional; used for reminders and overdue detection
+  created_at    DATETIME Auto-set on creation
+  updated_at    DATETIME Auto-updated on every change
+
+--------------------------------------------------------------------------------
+API ENDPOINTS
+--------------------------------------------------------------------------------
+
+AUTH  (prefix: /api/auth)
+  POST   /register      Create a new user account
+  POST   /login         Authenticate and receive a JWT token
+  GET    /me            Get the current logged-in user's profile
+  PATCH  /me            Update name, phone number, notification settings
+
+TASKS  (prefix: /api/tasks)
+  GET    /              List all tasks (query params: search, status, priority)
+  POST   /              Create a new task
+  GET    /dashboard     Get task count statistics for the dashboard
+  GET    /{id}          Get a single task by ID
+  PUT    /{id}          Update a task
+  PATCH  /{id}/complete Mark a task as completed
+  DELETE /{id}          Delete a task
+
+All task endpoints require a valid JWT token in the Authorization header:
+  Authorization: Bearer <your_token>
+
+--------------------------------------------------------------------------------
+AUTHENTICATION FLOW
+--------------------------------------------------------------------------------
+
+1. User registers or logs in via the frontend form.
+2. The backend validates credentials and returns a JWT token + user object.
+3. The frontend stores the token in localStorage via the useAuth hook.
+4. Every outgoing API request automatically attaches the token in the header
+   (handled by the Axios interceptor in services/api.ts).
+5. If the server returns 401 (token expired or invalid), the interceptor
+   clears localStorage and redirects the user to the login page.
+6. Logout simply removes the token and user from localStorage.
+
+--------------------------------------------------------------------------------
+NOTIFICATION SYSTEM
+--------------------------------------------------------------------------------
+
+HOW IT WORKS:
+  - APScheduler starts automatically when the backend starts (via FastAPI's
+    lifespan hook in main.py).
+  - A background job runs every 15 minutes.
+  - The job queries all users who have email or WhatsApp notifications enabled.
+  - For each user, it checks their incomplete tasks with a due_date set.
+  - If a task is due within the next 24 hours (+/- 10 minutes), it sends a
+    "due in 24 hours" reminder.
+  - If a task is due right now (+/- 10 minutes), it sends a "due today" reminder.
+
+EMAIL REMINDERS:
+  - Sent via Gmail SMTP using SSL on port 465.
+  - Uses a Gmail App Password (not your regular Gmail password).
+  - Messages are formatted as HTML emails.
+
+WHATSAPP REMINDERS:
+  - Sent via the Twilio WhatsApp Sandbox (free for testing).
+  - Users must join the Twilio sandbox by sending a WhatsApp message to
+    the Twilio number before they can receive messages.
+  - Messages are plain text with emoji formatting.
+
+NOTE: If Gmail or Twilio credentials are not set in .env, the scheduler still
+runs but simply skips sending and logs a warning. The app will not crash.
+
+--------------------------------------------------------------------------------
+HOW TO RUN LOCALLY
+--------------------------------------------------------------------------------
+
+REQUIREMENTS:
+  - Python 3.11 or newer
+  - Node.js 20 or newer
+  - PostgreSQL 15 or newer running locally
+
+STEP 1 — Create the database:
+  psql -U postgres -c "CREATE DATABASE task_manager;"
+
+STEP 2 — Set up the backend:
+  cd backend
+  python -m venv .venv
+  .venv\Scripts\activate          (Windows)
+  source .venv/bin/activate       (Mac/Linux)
+  pip install -r requirements.txt
+  cp .env.example .env
+  # Open .env and fill in your values (see below)
+
+STEP 3 — Run database migrations:
+  alembic upgrade head
+
+STEP 4 — Start the backend:
+  uvicorn app.main:app --reload
+  --> API available at:  http://localhost:8000
+  --> Swagger docs at:   http://localhost:8000/docs
+
+STEP 5 — Set up and start the frontend (new terminal):
+  cd frontend
+  npm install
+  npm run dev
+  --> App available at:  http://localhost:5173
+
+--------------------------------------------------------------------------------
+ENVIRONMENT VARIABLES  (backend/.env)
+--------------------------------------------------------------------------------
+
+DATABASE_URL=postgresql://postgres:password@localhost:5432/task_manager
+
+# JWT — change SECRET_KEY to a long random string in production
+SECRET_KEY=your-super-secret-jwt-key-change-this
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
+
+# Gmail — use an App Password, not your account password
+# Enable 2FA, then generate at: https://myaccount.google.com/apppasswords
+GMAIL_USER=your-gmail@gmail.com
+GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
+
+# Twilio WhatsApp Sandbox
+# Sign up at https://www.twilio.com and activate the WhatsApp Sandbox
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_AUTH_TOKEN=your_twilio_auth_token
+TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+
+--------------------------------------------------------------------------------
+HOW TO RUN WITH DOCKER (optional)
+--------------------------------------------------------------------------------
+
+  cp backend/.env.example backend/.env
+  # Edit backend/.env with your values
+
+  docker-compose up --build
+
+  # In a separate terminal, run migrations:
+  docker-compose exec backend alembic upgrade head
+
+  --> Frontend:  http://localhost:5173
+  --> Backend:   http://localhost:8000
+  --> Database:  localhost:5432
+
+--------------------------------------------------------------------------------
+FEATURES SUMMARY
+--------------------------------------------------------------------------------
+
+  [x] User registration with name, email, password, and optional phone number
+  [x] User login with JWT authentication
+  [x] Protected routes — unauthenticated users are redirected to login
+  [x] Create, view, edit, and delete tasks
+  [x] Mark tasks as complete with a single click
+  [x] Set task priority: Low, Medium, or High
+  [x] Set task status: Pending, In Progress, or Completed
+  [x] Set an optional due date and time for each task
+  [x] Search tasks by title or description (debounced)
+  [x] Filter tasks by status and priority
+  [x] Dashboard with counts for Total, Pending, In Progress, Completed, Overdue
+  [x] Overdue tasks are visually highlighted in red
+  [x] Toggle email reminders on/off from the Settings page
+  [x] Toggle WhatsApp reminders on/off from the Settings page
+  [x] Automatic reminders sent 24 hours before and on the due date
+  [x] Responsive UI — works on desktop and mobile
+  [x] Loading spinners and error messages throughout the UI
+  [x] Form validation on both frontend and backend
+
+================================================================================
+                              END OF OVERVIEW
+================================================================================
