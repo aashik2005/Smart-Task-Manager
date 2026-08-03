@@ -78,6 +78,8 @@ class Task(Base):
     notes = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False, server_default="true")
     sort_order = Column(Integer, default=0, nullable=False, server_default="0")
+    topic_queue = Column(JSON, nullable=True)
+    current_topic_index = Column(Integer, default=0, nullable=False, server_default="0")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

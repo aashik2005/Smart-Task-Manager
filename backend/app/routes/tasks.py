@@ -27,6 +27,12 @@ def _inject_completed_today(task: models.Task, db: Session, user_id: int) -> dic
         )
     out = schemas.TaskOut.model_validate(task).model_dump()
     out["is_completed_today"] = is_done
+    queue = task.topic_queue
+    if queue and len(queue) > 0:
+        idx = (task.current_topic_index or 0) % len(queue)
+        out["today_topic"] = queue[idx]
+    else:
+        out["today_topic"] = None
     return out
 
 
@@ -311,6 +317,9 @@ def mark_complete(
             )
             db.add(completion)
             db.flush()
+            # Advance topic queue index after a successful completion
+            if task.topic_queue and len(task.topic_queue) > 0:
+                task.current_topic_index = ((task.current_topic_index or 0) + 1) % len(task.topic_queue)
             streak_service.update_streak(db, current_user, task.task_type.value)
         except IntegrityError:
             db.rollback()

@@ -116,6 +116,8 @@ class TaskCreate(BaseModel):
     notes: Optional[str] = None
     is_active: bool = True
     sort_order: int = 0
+    topic_queue: Optional[List[str]] = None
+    current_topic_index: int = 0
 
     @validator("title")
     def title_not_empty(cls, v):
@@ -160,6 +162,8 @@ class TaskUpdate(BaseModel):
     notes: Optional[str] = None
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
+    topic_queue: Optional[List[str]] = None
+    current_topic_index: Optional[int] = None
 
     @validator("progress")
     def validate_progress(cls, v):
@@ -194,8 +198,11 @@ class TaskOut(BaseModel):
     notes: Optional[str]
     is_active: bool
     sort_order: int
+    topic_queue: Optional[List[str]]
+    current_topic_index: int
     milestones: List[MilestoneOut] = []
     is_completed_today: bool = False
+    today_topic: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

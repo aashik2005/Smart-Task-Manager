@@ -3,6 +3,56 @@ import {
   Task, TaskCreate, Priority, Status, TaskType, Category, WeekDay,
   WEEKDAYS, WEEKDAY_LABELS, CATEGORY_LABELS, REMINDER_OFFSETS,
 } from '../types'
+
+interface TopicQueueEditorProps {
+  topics: string[]
+  currentIndex: number
+  newTopic: string
+  onNewTopicChange: (v: string) => void
+  onAdd: () => void
+  onRemove: (idx: number) => void
+  onMove: (idx: number, dir: -1 | 1) => void
+}
+
+function TopicQueueEditor({ topics, currentIndex, newTopic, onNewTopicChange, onAdd, onRemove, onMove }: TopicQueueEditorProps) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <label className="label mb-0">Topic Queue <span className="text-gray-400 font-normal text-xs">(optional — rotates each day)</span></label>
+        {topics.length > 0 && (
+          <span className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">
+            Next: {topics[currentIndex % topics.length]}
+          </span>
+        )}
+      </div>
+      <div className="space-y-1.5 mb-2">
+        {topics.map((topic, i) => (
+          <div key={i} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm border ${i === currentIndex % topics.length ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 dark:border-indigo-600' : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40'}`}>
+            {i === currentIndex % topics.length && (
+              <span className="text-indigo-500 text-xs shrink-0">▶</span>
+            )}
+            <span className={`flex-1 ${i === currentIndex % topics.length ? 'text-indigo-700 dark:text-indigo-300 font-medium' : 'text-gray-700 dark:text-gray-300'}`}>{topic}</span>
+            <span className="text-xs text-gray-400 shrink-0">#{i + 1}</span>
+            <button type="button" onClick={() => onMove(i, -1)} disabled={i === 0} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 disabled:opacity-30 text-xs px-0.5">↑</button>
+            <button type="button" onClick={() => onMove(i, 1)} disabled={i === topics.length - 1} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 disabled:opacity-30 text-xs px-0.5">↓</button>
+            <button type="button" onClick={() => onRemove(i)} className="text-red-400 hover:text-red-600 text-xs ml-0.5">✕</button>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          className="input flex-1 text-sm"
+          placeholder="e.g. ATM Machine, Parking Lot..."
+          value={newTopic}
+          onChange={e => onNewTopicChange(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), onAdd())}
+        />
+        <button type="button" onClick={onAdd} className="btn-secondary text-sm px-3">Add</button>
+      </div>
+    </div>
+  )
+}
 import Spinner from './Spinner'
 import { taskService } from '../services/taskService'
 
@@ -29,6 +79,8 @@ const defaultForm: TaskCreate = {
   progress: 0,
   notes: '',
   is_active: true,
+  topic_queue: [],
+  current_topic_index: 0,
 }
 
 function toLocalDatetime(iso: string | null | undefined): string {
@@ -55,6 +107,9 @@ export default function TaskModal({ task, onSave, onClose }: Props) {
   const [milestones, setMilestones] = useState<Array<{ id?: number; title: string; completed: boolean }>>([])
   const [newMilestone, setNewMilestone] = useState('')
 
+  // Topic queue state (for daily/weekly tasks)
+  const [newTopic, setNewTopic] = useState('')
+
   useEffect(() => {
     if (task) {
       setForm({
@@ -74,6 +129,8 @@ export default function TaskModal({ task, onSave, onClose }: Props) {
         progress: task.progress,
         notes: task.notes ?? '',
         is_active: task.is_active,
+        topic_queue: task.topic_queue ?? [],
+        current_topic_index: task.current_topic_index ?? 0,
       })
       setMilestones(task.milestones.map(m => ({ id: m.id, title: m.title, completed: m.completed })))
     } else {
@@ -127,6 +184,34 @@ export default function TaskModal({ task, onSave, onClose }: Props) {
     })
   }
 
+  function addTopic() {
+    if (!newTopic.trim()) return
+    setForm(prev => ({ ...prev, topic_queue: [...(prev.topic_queue ?? []), newTopic.trim()] }))
+    setNewTopic('')
+  }
+
+  function removeTopic(idx: number) {
+    setForm(prev => {
+      const updated = (prev.topic_queue ?? []).filter((_, i) => i !== idx)
+      const currentIdx = prev.current_topic_index ?? 0
+      return {
+        ...prev,
+        topic_queue: updated,
+        current_topic_index: updated.length > 0 ? currentIdx % updated.length : 0,
+      }
+    })
+  }
+
+  function moveTopic(idx: number, dir: -1 | 1) {
+    setForm(prev => {
+      const q = [...(prev.topic_queue ?? [])]
+      const target = idx + dir
+      if (target < 0 || target >= q.length) return prev
+      ;[q[idx], q[target]] = [q[target], q[idx]]
+      return { ...prev, topic_queue: q }
+    })
+  }
+
   async function addMilestone() {
     if (!newMilestone.trim()) return
     if (task?.id) {
@@ -172,6 +257,8 @@ export default function TaskModal({ task, onSave, onClose }: Props) {
         reminder_time: form.reminder_time || null,
         color_label: form.color_label || null,
         category: form.category || null,
+        topic_queue: (form.topic_queue && form.topic_queue.length > 0) ? form.topic_queue : null,
+        current_topic_index: form.current_topic_index ?? 0,
       }
       await onSave(payload)
       onClose()
@@ -304,11 +391,22 @@ export default function TaskModal({ task, onSave, onClose }: Props) {
 
           {/* ── Daily fields ── */}
           {tt === 'daily' && (
-            <div>
-              <label className="label">Reminder Time (daily)</label>
-              <input type="time" className="input" value={form.reminder_time ?? ''} onChange={e => setForm({ ...form, reminder_time: e.target.value })} />
-              {errors.reminder_time && <p className="error-text">{errors.reminder_time}</p>}
-            </div>
+            <>
+              <div>
+                <label className="label">Reminder Time (daily)</label>
+                <input type="time" className="input" value={form.reminder_time ?? ''} onChange={e => setForm({ ...form, reminder_time: e.target.value })} />
+                {errors.reminder_time && <p className="error-text">{errors.reminder_time}</p>}
+              </div>
+              <TopicQueueEditor
+                topics={form.topic_queue ?? []}
+                currentIndex={form.current_topic_index ?? 0}
+                newTopic={newTopic}
+                onNewTopicChange={setNewTopic}
+                onAdd={addTopic}
+                onRemove={removeTopic}
+                onMove={moveTopic}
+              />
+            </>
           )}
 
           {/* ── Weekly fields ── */}
@@ -337,6 +435,15 @@ export default function TaskModal({ task, onSave, onClose }: Props) {
                 <label className="label">Reminder Time</label>
                 <input type="time" className="input" value={form.reminder_time ?? ''} onChange={e => setForm({ ...form, reminder_time: e.target.value })} />
               </div>
+              <TopicQueueEditor
+                topics={form.topic_queue ?? []}
+                currentIndex={form.current_topic_index ?? 0}
+                newTopic={newTopic}
+                onNewTopicChange={setNewTopic}
+                onAdd={addTopic}
+                onRemove={removeTopic}
+                onMove={moveTopic}
+              />
             </>
           )}
 

@@ -104,6 +104,9 @@ export interface Task {
   sort_order: number
   milestones: Milestone[]
   is_completed_today: boolean
+  topic_queue: string[] | null
+  current_topic_index: number
+  today_topic: string | null
   created_at: string
   updated_at: string
 }
@@ -126,6 +129,8 @@ export interface TaskCreate {
   notes?: string | null
   is_active?: boolean
   sort_order?: number
+  topic_queue?: string[] | null
+  current_topic_index?: number
 }
 
 export interface TaskUpdate extends Partial<TaskCreate> {}

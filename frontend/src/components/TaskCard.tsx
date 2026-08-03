@@ -94,6 +94,15 @@ export default function TaskCard({ task, onEdit, onDelete, onComplete, draggable
         </div>
       </div>
 
+      {/* Today's topic banner */}
+      {task.today_topic && (
+        <div className="flex items-center gap-2 mb-2 px-2.5 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700">
+          <span className="text-indigo-500 text-sm">📌</span>
+          <span className="text-xs font-medium text-indigo-700 dark:text-indigo-300">Today: </span>
+          <span className="text-xs text-indigo-800 dark:text-indigo-200 font-semibold">{task.today_topic}</span>
+        </div>
+      )}
+
       {/* Progress bar for target tasks */}
       {task.task_type === 'target' && (
         <div className="mb-2">
